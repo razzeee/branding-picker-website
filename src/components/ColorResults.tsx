@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Algorithm, Color } from "@/lib/types";
 import { analyzeImage } from "@/lib/colorAnalyzer";
+import OklchColorPicker from "./OklchColorPicker";
 
 interface ColorResultsProps {
   imageFile: File | null;
@@ -17,6 +18,7 @@ export default function ColorResults({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!imageFile) {
@@ -50,6 +52,13 @@ export default function ColorResults({
     navigator.clipboard.writeText(hex);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleColorEdit = (index: number, newColor: Color) => {
+    const updatedColors = [...colors];
+    updatedColors[index] = newColor;
+    setColors(updatedColors);
+    onColorsExtracted?.(updatedColors);
   };
 
   if (!imageFile) {
@@ -120,7 +129,7 @@ export default function ColorResults({
           className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:shadow-md transition-shadow"
         >
           <div
-            className="w-16 h-16 rounded-lg shadow-md flex-shrink-0 border-2 border-gray-200 dark:border-gray-600"
+            className="w-16 h-16 rounded-lg shadow-md shrink-0 border-2 border-gray-200 dark:border-gray-600"
             style={{ backgroundColor: color.hex }}
           />
           <div className="flex-1">
@@ -136,14 +145,45 @@ export default function ColorResults({
               </div>
             )}
           </div>
-          <button
-            onClick={() => copyToClipboard(color.hex, index)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            {copiedIndex === index ? "✓ Copied!" : "Copy"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditingIndex(index)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+              aria-label="Edit color"
+            >
+              <svg
+                className="w-4 h-4 inline-block mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+              Edit
+            </button>
+            <button
+              onClick={() => copyToClipboard(color.hex, index)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              {copiedIndex === index ? "✓ Copied!" : "Copy"}
+            </button>
+          </div>
         </div>
       ))}
+
+      {/* OKLCH Color Picker Modal */}
+      {editingIndex !== null && (
+        <OklchColorPicker
+          color={colors[editingIndex]}
+          onColorChange={(newColor) => handleColorEdit(editingIndex, newColor)}
+          onClose={() => setEditingIndex(null)}
+        />
+      )}
     </div>
   );
 }
