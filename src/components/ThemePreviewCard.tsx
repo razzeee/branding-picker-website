@@ -1,5 +1,6 @@
 import Image from "next/image";
 import ContrastInfo from "./ContrastInfo";
+import IconContrastInfo from "./IconContrastInfo";
 
 interface ThemePreviewCardProps {
   title: string;
@@ -62,6 +63,7 @@ export default function ThemePreviewCard({
         </button>
       </div>
       <ContrastInfo contrast={contrast} rating={rating} />
+      <IconContrastInfo iconUrl={iconUrl} backgroundColor={backgroundColor} />
     </div>
   );
 }
