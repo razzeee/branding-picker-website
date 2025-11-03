@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Algorithm, FlathubApp, Color } from "@/lib/types";
 import { ALGORITHMS } from "@/lib/colorAnalyzer";
 import ImageUploader from "@/components/ImageUploader";
@@ -9,7 +10,11 @@ import ColorResults from "@/components/ColorResults";
 import FlathubLoader from "@/components/FlathubLoader";
 import BrandingPreview from "@/components/BrandingPreview";
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialAppId = searchParams.get("app");
+
   const [selectedAlgorithm, setSelectedAlgorithm] =
     useState<Algorithm>("vibrant");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -19,12 +24,21 @@ export default function Home() {
   const handleFlathubLoad = (file: File, app: FlathubApp) => {
     setImageFile(file);
     setAppData(app);
+    // Update URL with app ID
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("app", app.id);
+    router.push(`?${params.toString()}`, { scroll: false });
   };
 
   const handleManualImageSelect = (file: File | null) => {
     setImageFile(file);
     // Clear Flathub data when manually uploading an image
     setAppData(null);
+    // Remove app param from URL
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("app");
+    const newUrl = params.toString() ? `?${params.toString()}` : "/";
+    router.push(newUrl, { scroll: false });
   };
 
   // Create object URL for uploaded images
@@ -81,7 +95,10 @@ export default function Home() {
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                   Load from Flathub
                 </h3>
-                <FlathubLoader onImageLoad={handleFlathubLoad} />
+                <FlathubLoader
+                  onImageLoad={handleFlathubLoad}
+                  initialAppId={initialAppId}
+                />
               </div>
 
               <div className="relative my-6">
@@ -204,5 +221,19 @@ export default function Home() {
         </footer>
       </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-300">Loading...</div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import Image from "next/image";
 import { Color, FlathubApp } from "@/lib/types";
 import {
   getContrastRatio,
@@ -9,6 +8,7 @@ import {
 } from "@/lib/colorUtils";
 import BrandingXmlExport from "./BrandingXmlExport";
 import AppInfoDisplay from "./AppInfoDisplay";
+import ThemePreviewCard from "./ThemePreviewCard";
 
 interface BrandingPreviewProps {
   colors: Color[];
@@ -23,26 +23,77 @@ export default function BrandingPreview({
   appName = "App",
   appData,
 }: BrandingPreviewProps) {
-  // Automatically select best colors based on luminance
+  // Automatically select best colors based on luminance AND contrast
   const { bestLightIndex, bestDarkIndex } = useMemo(() => {
     if (colors.length === 0) return { bestLightIndex: 0, bestDarkIndex: 1 };
 
-    // Sort colors by luminance to find lightest and darkest
-    const sortedByLuminance = colors
-      .map((color, index) => ({ color, index, luminance: getLuminance(color) }))
-      .sort((a, b) => b.luminance - a.luminance);
+    const whiteText = hexToRgb("#ffffff")!;
+    const blackText = hexToRgb("#000000")!;
 
-    // Best light theme color: lighter color (higher luminance)
+    // Filter colors by whether they have good contrast (at least 4.5:1)
+    const colorsWithContrast = colors.map((color, index) => {
+      const contrastWhite = getContrastRatio(color, whiteText);
+      const contrastBlack = getContrastRatio(color, blackText);
+      const bestContrast = Math.max(contrastWhite, contrastBlack);
+      const hasGoodContrast = bestContrast >= 4.5;
+      const luminance = getLuminance(color);
+
+      return { color, index, luminance, hasGoodContrast, bestContrast };
+    });
+
+    // Try to find colors with good contrast first, fall back to any color if none exist
+    const goodContrastColors = colorsWithContrast.filter(
+      (c) => c.hasGoodContrast
+    );
+    const colorsToUse =
+      goodContrastColors.length > 0 ? goodContrastColors : colorsWithContrast;
+
+    // Sort by luminance to find lightest and darkest
+    const sortedByLuminance = [...colorsToUse].sort(
+      (a, b) => b.luminance - a.luminance
+    );
+
+    // Best light theme color: lighter color (higher luminance) with good contrast
     const bestLightIndex = sortedByLuminance[0].index;
 
-    // Best dark theme color: darker color (lower luminance)
+    // Best dark theme color: darker color (lower luminance) with good contrast
     const bestDarkIndex = sortedByLuminance[sortedByLuminance.length - 1].index;
 
     return { bestLightIndex, bestDarkIndex };
   }, [colors]);
 
+  // Track the colors array to detect when it changes
+  const [prevColors, setPrevColors] = useState(colors);
   const [lightColorIndex, setLightColorIndex] = useState(bestLightIndex);
   const [darkColorIndex, setDarkColorIndex] = useState(bestDarkIndex);
+
+  // Reset selections when colors change (e.g., algorithm change)
+  if (colors !== prevColors) {
+    setPrevColors(colors);
+    setLightColorIndex(bestLightIndex);
+    setDarkColorIndex(bestDarkIndex);
+  }
+
+  // Sort colors for each theme based on suitability
+  const sortedColorsForLight = useMemo(() => {
+    return [...colors]
+      .map((color, originalIndex) => ({
+        color,
+        originalIndex,
+        luminance: getLuminance(color),
+      }))
+      .sort((a, b) => b.luminance - a.luminance); // Lighter colors first for light theme
+  }, [colors]);
+
+  const sortedColorsForDark = useMemo(() => {
+    return [...colors]
+      .map((color, originalIndex) => ({
+        color,
+        originalIndex,
+        luminance: getLuminance(color),
+      }))
+      .sort((a, b) => a.luminance - b.luminance); // Darker colors first for dark theme
+  }, [colors]);
 
   const { lightTheme, darkTheme } = useMemo(() => {
     if (colors.length === 0) {
@@ -111,6 +162,23 @@ export default function BrandingPreview({
     return { lightTheme, darkTheme };
   }, [colors, lightColorIndex, darkColorIndex]);
 
+  // Calculate contrast warnings
+  const lightContrastWarning = useMemo(() => {
+    if (!lightTheme) return null;
+    if (lightTheme.contrast < 4.5) {
+      return "⚠️ Low contrast - May not meet WCAG AA standards";
+    }
+    return null;
+  }, [lightTheme]);
+
+  const darkContrastWarning = useMemo(() => {
+    if (!darkTheme) return null;
+    if (darkTheme.contrast < 4.5) {
+      return "⚠️ Low contrast - May not meet WCAG AA standards";
+    }
+    return null;
+  }, [darkTheme]);
+
   if (colors.length === 0 || !lightTheme || !darkTheme) {
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -140,6 +208,30 @@ export default function BrandingPreview({
 
   return (
     <div className="space-y-6">
+      {/* Legend */}
+      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm">
+        <div className="flex flex-wrap gap-4 items-center justify-center text-gray-700 dark:text-gray-300">
+          <span className="flex items-center gap-1.5">
+            <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              ★
+            </span>
+            <span className="bg-purple-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center -ml-1">
+              ★
+            </span>
+            <span className="ml-0.5">Recommended</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="bg-yellow-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              !
+            </span>
+            Low contrast
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Colors sorted by suitability for each theme
+          </span>
+        </div>
+      </div>
+
       {/* Color Selectors */}
       <div className="grid md:grid-cols-2 gap-6">
         <div>
@@ -147,19 +239,45 @@ export default function BrandingPreview({
             Light Theme Brand Color
           </h3>
           <div className="flex flex-wrap gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={index}
-                onClick={() => setLightColorIndex(index)}
-                className={`w-12 h-12 rounded-lg shadow-md transition-all ${
-                  lightColorIndex === index
-                    ? "ring-4 ring-blue-500 scale-110"
-                    : "hover:scale-105"
-                }`}
-                style={{ backgroundColor: color.hex }}
-                title={color.hex}
-              />
-            ))}
+            {sortedColorsForLight.map(({ color, originalIndex, luminance }) => {
+              const isRecommended = originalIndex === bestLightIndex; // Match with default selection
+              const whiteText = hexToRgb("#ffffff")!;
+              const blackText = hexToRgb("#000000")!;
+              const contrastWhite = getContrastRatio(color, whiteText);
+              const contrastBlack = getContrastRatio(color, blackText);
+              const bestContrast = Math.max(contrastWhite, contrastBlack);
+              const hasGoodContrast = bestContrast >= 4.5;
+
+              return (
+                <div key={originalIndex} className="relative">
+                  <button
+                    onClick={() => setLightColorIndex(originalIndex)}
+                    className={`w-12 h-12 rounded-lg shadow-md transition-all ${
+                      lightColorIndex === originalIndex
+                        ? "ring-4 ring-blue-500 scale-110"
+                        : "hover:scale-105"
+                    } ${!hasGoodContrast ? "opacity-60" : ""}`}
+                    style={{ backgroundColor: color.hex }}
+                    title={`${color.hex}\nLuminance: ${luminance.toFixed(
+                      2
+                    )}\nContrast: ${bestContrast.toFixed(2)}`}
+                  />
+                  {isRecommended && (
+                    <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                      ★
+                    </span>
+                  )}
+                  {!hasGoodContrast && (
+                    <span
+                      className="absolute -bottom-1 -right-1 bg-yellow-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md"
+                      title="Low contrast"
+                    >
+                      !
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Selected:{" "}
@@ -167,6 +285,11 @@ export default function BrandingPreview({
               {colors[lightColorIndex]?.hex}
             </span>
           </p>
+          {lightContrastWarning && (
+            <p className="text-sm text-yellow-600 dark:text-yellow-500 mt-1 font-medium">
+              {lightContrastWarning}
+            </p>
+          )}
         </div>
 
         <div>
@@ -174,19 +297,45 @@ export default function BrandingPreview({
             Dark Theme Brand Color
           </h3>
           <div className="flex flex-wrap gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={index}
-                onClick={() => setDarkColorIndex(index)}
-                className={`w-12 h-12 rounded-lg shadow-md transition-all ${
-                  darkColorIndex === index
-                    ? "ring-4 ring-purple-500 scale-110"
-                    : "hover:scale-105"
-                }`}
-                style={{ backgroundColor: color.hex }}
-                title={color.hex}
-              />
-            ))}
+            {sortedColorsForDark.map(({ color, originalIndex, luminance }) => {
+              const isRecommended = originalIndex === bestDarkIndex; // Match with default selection
+              const whiteText = hexToRgb("#ffffff")!;
+              const blackText = hexToRgb("#000000")!;
+              const contrastWhite = getContrastRatio(color, whiteText);
+              const contrastBlack = getContrastRatio(color, blackText);
+              const bestContrast = Math.max(contrastWhite, contrastBlack);
+              const hasGoodContrast = bestContrast >= 4.5;
+
+              return (
+                <div key={originalIndex} className="relative">
+                  <button
+                    onClick={() => setDarkColorIndex(originalIndex)}
+                    className={`w-12 h-12 rounded-lg shadow-md transition-all ${
+                      darkColorIndex === originalIndex
+                        ? "ring-4 ring-purple-500 scale-110"
+                        : "hover:scale-105"
+                    } ${!hasGoodContrast ? "opacity-60" : ""}`}
+                    style={{ backgroundColor: color.hex }}
+                    title={`${color.hex}\nLuminance: ${luminance.toFixed(
+                      2
+                    )}\nContrast: ${bestContrast.toFixed(2)}`}
+                  />
+                  {isRecommended && (
+                    <span className="absolute -top-1 -right-1 bg-purple-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                      ★
+                    </span>
+                  )}
+                  {!hasGoodContrast && (
+                    <span
+                      className="absolute -bottom-1 -right-1 bg-yellow-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md"
+                      title="Low contrast"
+                    >
+                      !
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Selected:{" "}
@@ -194,255 +343,32 @@ export default function BrandingPreview({
               {colors[darkColorIndex]?.hex}
             </span>
           </p>
+          {darkContrastWarning && (
+            <p className="text-sm text-yellow-600 dark:text-yellow-500 mt-1 font-medium">
+              {darkContrastWarning}
+            </p>
+          )}
         </div>
       </div>
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Light Theme Preview
-          </h3>
-          <div
-            className="rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px] border-2 border-gray-300 dark:border-gray-600 shadow-lg"
-            style={{ backgroundColor: lightTheme.background.hex }}
-          >
-            {iconUrl && (
-              <Image
-                src={iconUrl}
-                alt={`${appName} icon`}
-                width={96}
-                height={96}
-                className="mb-4 drop-shadow-lg"
-                unoptimized
-              />
-            )}
-            <h4
-              className="text-3xl font-bold mb-2 text-center"
-              style={{ color: lightTheme.foreground.hex }}
-            >
-              {appName}
-            </h4>
-            <p
-              className="text-center max-w-xs"
-              style={{ color: lightTheme.foreground.hex }}
-            >
-              Sample text showing how content appears on the brand color
-            </p>
-            <button
-              className="mt-6 px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
-              style={{
-                backgroundColor: lightTheme.foreground.hex,
-                color: lightTheme.background.hex,
-              }}
-            >
-              Get {appName}
-            </button>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Contrast:
-                </span>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  {lightTheme.contrast.toFixed(2)}:1
-                </span>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <span
-                  className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    lightTheme.rating.aaa.normal
-                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                      : lightTheme.rating.aa.normal
-                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                      : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                  }`}
-                >
-                  {lightTheme.rating.aaa.normal
-                    ? "✓ AAA"
-                    : lightTheme.rating.aa.normal
-                    ? "✓ AA"
-                    : "✗ Fail"}
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {lightTheme.rating.aaa.normal
-                    ? "Excellent contrast"
-                    : lightTheme.rating.aa.normal
-                    ? "Good contrast"
-                    : "Poor contrast"}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      lightTheme.rating.aa.normal
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {lightTheme.rating.aa.normal ? "✓" : "✗"} AA Normal (4.5:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      lightTheme.rating.aa.large
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {lightTheme.rating.aa.large ? "✓" : "✗"} AA Large (3:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      lightTheme.rating.aaa.normal
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {lightTheme.rating.aaa.normal ? "✓" : "✗"} AAA Normal (7:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      lightTheme.rating.aaa.large
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {lightTheme.rating.aaa.large ? "✓" : "✗"} AAA Large (4.5:1)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Dark Theme Preview
-          </h3>
-          <div
-            className="rounded-xl p-8 flex flex-col items-center justify-center min-h-[300px] border-2 border-gray-300 dark:border-gray-600 shadow-lg"
-            style={{ backgroundColor: darkTheme.background.hex }}
-          >
-            {iconUrl && (
-              <Image
-                src={iconUrl}
-                alt={`${appName} icon`}
-                width={96}
-                height={96}
-                className="mb-4 drop-shadow-lg"
-                unoptimized
-              />
-            )}
-            <h4
-              className="text-3xl font-bold mb-2 text-center"
-              style={{ color: darkTheme.foreground.hex }}
-            >
-              {appName}
-            </h4>
-            <p
-              className="text-center max-w-xs"
-              style={{ color: darkTheme.foreground.hex }}
-            >
-              Sample text showing how content appears on the brand color
-            </p>
-            <button
-              className="mt-6 px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
-              style={{
-                backgroundColor: darkTheme.foreground.hex,
-                color: darkTheme.background.hex,
-              }}
-            >
-              Get {appName}
-            </button>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Contrast:
-                </span>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  {darkTheme.contrast.toFixed(2)}:1
-                </span>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <span
-                  className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    darkTheme.rating.aaa.normal
-                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                      : darkTheme.rating.aa.normal
-                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                      : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                  }`}
-                >
-                  {darkTheme.rating.aaa.normal
-                    ? "✓ AAA"
-                    : darkTheme.rating.aa.normal
-                    ? "✓ AA"
-                    : "✗ Fail"}
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {darkTheme.rating.aaa.normal
-                    ? "Excellent contrast"
-                    : darkTheme.rating.aa.normal
-                    ? "Good contrast"
-                    : "Poor contrast"}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      darkTheme.rating.aa.normal
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {darkTheme.rating.aa.normal ? "✓" : "✗"} AA Normal (4.5:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      darkTheme.rating.aa.large
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {darkTheme.rating.aa.large ? "✓" : "✗"} AA Large (3:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      darkTheme.rating.aaa.normal
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {darkTheme.rating.aaa.normal ? "✓" : "✗"} AAA Normal (7:1)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      darkTheme.rating.aaa.large
-                        ? "text-green-600 dark:text-green-400"
-                        : ""
-                    }
-                  >
-                    {darkTheme.rating.aaa.large ? "✓" : "✗"} AAA Large (4.5:1)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ThemePreviewCard
+          title="Light Theme Preview"
+          backgroundColor={lightTheme.background.hex}
+          foregroundColor={lightTheme.foreground.hex}
+          iconUrl={iconUrl}
+          appName={appName}
+          contrast={lightTheme.contrast}
+          rating={lightTheme.rating}
+        />
+        <ThemePreviewCard
+          title="Dark Theme Preview"
+          backgroundColor={darkTheme.background.hex}
+          foregroundColor={darkTheme.foreground.hex}
+          iconUrl={iconUrl}
+          appName={appName}
+          contrast={darkTheme.contrast}
+          rating={darkTheme.rating}
+        />
       </div>
 
       {/* AppStream XML Export */}

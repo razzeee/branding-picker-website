@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   parseFlathubInput,
   fetchFlathubApp,
@@ -8,12 +8,64 @@ import { FlathubApp } from "@/lib/types";
 
 interface FlathubLoaderProps {
   onImageLoad: (file: File, appData: FlathubApp) => void;
+  initialAppId?: string | null;
 }
 
-export default function FlathubLoader({ onImageLoad }: FlathubLoaderProps) {
+export default function FlathubLoader({
+  onImageLoad,
+  initialAppId,
+}: FlathubLoaderProps) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedInitial = useRef(false);
+
+  const loadApp = useCallback(
+    async (appIdOrUrl: string) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Parse input to get app ID
+        const appId = parseFlathubInput(appIdOrUrl);
+        if (!appId) {
+          throw new Error("Invalid Flathub URL or app ID format");
+        }
+
+        // Fetch app metadata
+        const appData = await fetchFlathubApp(appId);
+
+        // Load icon image
+        if (!appData.icon) {
+          throw new Error("App icon not available");
+        }
+
+        const imageFile = await loadImageFromUrl(
+          appData.icon,
+          `${appId}-icon.png`
+        );
+
+        // Pass to parent
+        onImageLoad(imageFile, appData);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load Flathub app"
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [onImageLoad]
+  );
+
+  // Load initial app ID from URL if provided
+  useEffect(() => {
+    if (initialAppId && !hasLoadedInitial.current) {
+      hasLoadedInitial.current = true;
+      setInput(initialAppId);
+      loadApp(initialAppId);
+    }
+  }, [initialAppId, loadApp]);
 
   const handleLoad = async () => {
     if (!input.trim()) {
@@ -21,39 +73,7 @@ export default function FlathubLoader({ onImageLoad }: FlathubLoaderProps) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Parse input to get app ID
-      const appId = parseFlathubInput(input);
-      if (!appId) {
-        throw new Error("Invalid Flathub URL or app ID format");
-      }
-
-      // Fetch app metadata
-      const appData = await fetchFlathubApp(appId);
-
-      // Load icon image
-      if (!appData.icon) {
-        throw new Error("App icon not available");
-      }
-
-      const imageFile = await loadImageFromUrl(
-        appData.icon,
-        `${appId}-icon.png`
-      );
-
-      // Pass to parent
-      onImageLoad(imageFile, appData);
-      setInput(""); // Clear input on success
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load Flathub app"
-      );
-    } finally {
-      setLoading(false);
-    }
+    await loadApp(input);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
