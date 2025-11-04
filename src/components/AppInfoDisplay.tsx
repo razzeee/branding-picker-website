@@ -36,9 +36,33 @@ export default function AppInfoDisplay({ app }: AppInfoDisplayProps) {
             {app.id}
           </div>
 
-          {urlEntries.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {urlEntries.map(([key, url]) => (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* Flathub link */}
+            <a
+              href={`https://flathub.org/apps/${app.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 rounded border border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+            >
+              <span>🏪 Flathub</span>
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+
+            {/* Other app URLs */}
+            {urlEntries.length > 0 &&
+              urlEntries.map(([key, url]) => (
                 <a
                   key={key}
                   href={url}
@@ -67,8 +91,7 @@ export default function AppInfoDisplay({ app }: AppInfoDisplayProps) {
                   </svg>
                 </a>
               ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
