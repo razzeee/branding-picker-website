@@ -1,4 +1,5 @@
 import { FlathubApp } from "@/lib/types";
+import BrandingColorsDisplay from "./BrandingColorsDisplay";
 
 interface AppInfoDisplayProps {
   app: FlathubApp | null;
@@ -15,7 +16,7 @@ export default function AppInfoDisplay({ app }: AppInfoDisplayProps) {
     <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
       <div className="flex items-start gap-4">
         {app.icon && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={app.icon}
@@ -70,6 +71,9 @@ export default function AppInfoDisplay({ app }: AppInfoDisplayProps) {
           )}
         </div>
       </div>
+
+      {/* Display existing branding colors if available */}
+      <BrandingColorsDisplay app={app} />
     </div>
   );
 }

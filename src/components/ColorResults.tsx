@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Algorithm, Color } from "@/lib/types";
+import { Algorithm, Color, FlathubApp } from "@/lib/types";
 import { analyzeImage } from "@/lib/colorAnalyzer";
 import OklchColorPicker from "./OklchColorPicker";
 
@@ -7,12 +7,14 @@ interface ColorResultsProps {
   imageFile: File | null;
   algorithm: Algorithm;
   onColorsExtracted?: (colors: Color[]) => void;
+  appData?: FlathubApp | null;
 }
 
 export default function ColorResults({
   imageFile,
   algorithm,
   onColorsExtracted,
+  appData,
 }: ColorResultsProps) {
   const [colors, setColors] = useState<Color[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,6 +61,55 @@ export default function ColorResults({
     updatedColors[index] = newColor;
     setColors(updatedColors);
     onColorsExtracted?.(updatedColors);
+  };
+
+  // Calculate color similarity (Delta E CIE76 approximation)
+  const calculateColorSimilarity = (
+    color1: Color,
+    color2Hex: string
+  ): number => {
+    const color2 = hexToRgb(color2Hex);
+    if (!color2) return 100;
+
+    const rDiff = color1.r - color2.r;
+    const gDiff = color1.g - color2.g;
+    const bDiff = color1.b - color2.b;
+
+    // Simple Euclidean distance in RGB space (normalized to 0-100)
+    const distance = Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+    return Math.round((distance / 441.67) * 100); // 441.67 is max distance (sqrt(255^2 * 3))
+  };
+
+  const findClosestFlathubColor = (color: Color) => {
+    if (!appData?.branding || appData.branding.length === 0) {
+      return null;
+    }
+
+    let closest = appData.branding[0];
+    let minDistance = calculateColorSimilarity(color, closest.value);
+
+    for (const fbColor of appData.branding) {
+      const distance = calculateColorSimilarity(color, fbColor.value);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = fbColor;
+      }
+    }
+
+    return { color: closest, similarity: 100 - minDistance };
+  };
+
+  const hexToRgb = (hex: string): Color | null => {
+    const cleanHex = hex.startsWith("#") ? hex : `#${hex}`;
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(cleanHex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+          hex: cleanHex,
+        }
+      : null;
   };
 
   if (!imageFile) {
@@ -123,58 +174,92 @@ export default function ColorResults({
 
   return (
     <div className="space-y-4">
-      {colors.map((color, index) => (
-        <div
-          key={index}
-          className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:shadow-md transition-shadow"
-        >
+      {colors.map((color, index) => {
+        const closestMatch = findClosestFlathubColor(color);
+        const isVeryClose = closestMatch && closestMatch.similarity > 80;
+
+        return (
           <div
-            className="w-16 h-16 rounded-lg shadow-md shrink-0 border-2 border-gray-200 dark:border-gray-600"
-            style={{ backgroundColor: color.hex }}
-          />
-          <div className="flex-1">
-            <div className="font-mono text-lg font-semibold text-gray-900 dark:text-white">
-              {color.hex.toUpperCase()}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-              RGB({color.r}, {color.g}, {color.b})
-            </div>
-            {color.count && (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {color.count} pixels
+            key={index}
+            className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:shadow-md transition-shadow"
+          >
+            <div
+              className="w-16 h-16 rounded-lg shadow-md shrink-0 border-2 border-gray-200 dark:border-gray-600"
+              style={{ backgroundColor: color.hex }}
+            />
+            <div className="flex-1">
+              <div className="font-mono text-lg font-semibold text-gray-900 dark:text-white">
+                {color.hex.toUpperCase()}
               </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setEditingIndex(index)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-              aria-label="Edit color"
-            >
-              <svg
-                className="w-4 h-4 inline-block mr-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                RGB({color.r}, {color.g}, {color.b})
+              </div>
+              {color.count && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {color.count} pixels
+                </div>
+              )}
+              {closestMatch && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded border border-gray-300 dark:border-gray-500"
+                    style={{
+                      backgroundColor: closestMatch.color.value.startsWith("#")
+                        ? closestMatch.color.value
+                        : `#${closestMatch.color.value}`,
+                    }}
+                  />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {isVeryClose ? (
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        ✓ Similar to Flathub {closestMatch.color.type}
+                        {closestMatch.color.scheme_preference &&
+                          ` (${closestMatch.color.scheme_preference})`}{" "}
+                        ({Math.round(closestMatch.similarity)}%)
+                      </span>
+                    ) : (
+                      <span>
+                        {Math.round(closestMatch.similarity)}% similar to
+                        Flathub {closestMatch.color.type}
+                        {closestMatch.color.scheme_preference &&
+                          ` (${closestMatch.color.scheme_preference})`}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingIndex(index)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                aria-label="Edit color"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-              Edit
-            </button>
-            <button
-              onClick={() => copyToClipboard(color.hex, index)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              {copiedIndex === index ? "✓ Copied!" : "Copy"}
-            </button>
+                <svg
+                  className="w-4 h-4 inline-block mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Edit
+              </button>
+              <button
+                onClick={() => copyToClipboard(color.hex, index)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                {copiedIndex === index ? "✓ Copied!" : "Copy"}
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* OKLCH Color Picker Modal */}
       {editingIndex !== null && (

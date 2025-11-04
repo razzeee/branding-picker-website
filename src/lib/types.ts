@@ -32,4 +32,9 @@ export interface FlathubApp {
     translate?: string;
     vcs_browser?: string;
   };
+  branding?: Array<{
+    type: "primary" | "secondary";
+    value: string;
+    scheme_preference?: "light" | "dark";
+  }>;
 }

@@ -55,6 +55,7 @@ export async function fetchFlathubApp(appId: string): Promise<FlathubApp> {
     name: data.name || appId,
     summary: data.summary || "",
     urls: data.urls || {},
+    branding: data.branding || [],
   };
 
   // Construct icon URL via our proxy to avoid CORS
