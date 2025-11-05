@@ -17,6 +17,20 @@ interface BrandingPreviewProps {
   appData?: FlathubApp | null;
 }
 
+export function getContrastColor(hexColor: string): "black" | "white" {
+  const rgb = hexToRgb(hexColor);
+
+  if (!rgb) {
+    return "black";
+  }
+
+  // http://www.w3.org/TR/AERT#color-contrast
+  const brightness = Math.round(
+    (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000
+  );
+  return brightness > 125 ? "black" : "white";
+}
+
 export default function BrandingPreview({
   colors,
   iconUrl,
@@ -102,61 +116,33 @@ export default function BrandingPreview({
 
     // Light theme - use selected light color
     const lightBrandColor = colors[lightColorIndex] || colors[0];
-    const lightWhiteText = hexToRgb("#ffffff")!;
-    const lightBlackText = hexToRgb("#000000")!;
-    const lightContrastWithWhite = getContrastRatio(
-      lightBrandColor,
-      lightWhiteText
-    );
-    const lightContrastWithBlack = getContrastRatio(
-      lightBrandColor,
-      lightBlackText
-    );
-    const lightBestTextColor =
-      lightContrastWithWhite > lightContrastWithBlack
-        ? lightWhiteText
-        : lightBlackText;
-    const lightBestContrast = Math.max(
-      lightContrastWithWhite,
-      lightContrastWithBlack
-    );
-    const lightBestRating = getContrastRating(lightBestContrast);
+    const lightTextColorHex =
+      getContrastColor(lightBrandColor.hex) === "white" ? "#ffffff" : "#000000";
+    const lightTextColor = hexToRgb(lightTextColorHex)!;
+    const lightContrast = getContrastRatio(lightBrandColor, lightTextColor);
+    const lightRating = getContrastRating(lightContrast);
 
     const lightTheme = {
       background: lightBrandColor,
-      foreground: lightBestTextColor,
-      contrast: lightBestContrast,
-      rating: lightBestRating,
+      foreground: lightTextColor,
+      contrast: lightContrast,
+      rating: lightRating,
     };
 
     // Dark theme - use selected dark color (or same if only one color)
     const darkBrandColor =
       colors[darkColorIndex] || colors[Math.min(1, colors.length - 1)];
-    const darkWhiteText = hexToRgb("#ffffff")!;
-    const darkBlackText = hexToRgb("#000000")!;
-    const darkContrastWithWhite = getContrastRatio(
-      darkBrandColor,
-      darkWhiteText
-    );
-    const darkContrastWithBlack = getContrastRatio(
-      darkBrandColor,
-      darkBlackText
-    );
-    const darkBestTextColor =
-      darkContrastWithWhite > darkContrastWithBlack
-        ? darkWhiteText
-        : darkBlackText;
-    const darkBestContrast = Math.max(
-      darkContrastWithWhite,
-      darkContrastWithBlack
-    );
-    const darkBestRating = getContrastRating(darkBestContrast);
+    const darkTextColorHex =
+      getContrastColor(darkBrandColor.hex) === "white" ? "#ffffff" : "#000000";
+    const darkTextColor = hexToRgb(darkTextColorHex)!;
+    const darkContrast = getContrastRatio(darkBrandColor, darkTextColor);
+    const darkRating = getContrastRating(darkContrast);
 
     const darkTheme = {
       background: darkBrandColor,
-      foreground: darkBestTextColor,
-      contrast: darkBestContrast,
-      rating: darkBestRating,
+      foreground: darkTextColor,
+      contrast: darkContrast,
+      rating: darkRating,
     };
 
     return { lightTheme, darkTheme };
