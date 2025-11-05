@@ -17,18 +17,20 @@ interface BrandingPreviewProps {
   appData?: FlathubApp | null;
 }
 
-export function getContrastColor(hexColor: string): "black" | "white" {
+export function getContrastColor(hexColor: string): Color {
   const rgb = hexToRgb(hexColor);
 
   if (!rgb) {
-    return "black";
+    return { r: 0, g: 0, b: 0, hex: "#000000" }; // Default to black on parse failure
   }
 
   // http://www.w3.org/TR/AERT#color-contrast
   const brightness = Math.round(
     (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000
   );
-  return brightness > 125 ? "black" : "white";
+  return brightness > 125
+    ? { r: 0, g: 0, b: 0, hex: "#000000" }
+    : { r: 255, g: 255, b: 255, hex: "#FFFFFF" };
 }
 
 export default function BrandingPreview({
@@ -116,9 +118,7 @@ export default function BrandingPreview({
 
     // Light theme - use selected light color
     const lightBrandColor = colors[lightColorIndex] || colors[0];
-    const lightTextColorHex =
-      getContrastColor(lightBrandColor.hex) === "white" ? "#ffffff" : "#000000";
-    const lightTextColor = hexToRgb(lightTextColorHex)!;
+    const lightTextColor = getContrastColor(lightBrandColor.hex);
     const lightContrast = getContrastRatio(lightBrandColor, lightTextColor);
     const lightRating = getContrastRating(lightContrast);
 
@@ -132,9 +132,7 @@ export default function BrandingPreview({
     // Dark theme - use selected dark color (or same if only one color)
     const darkBrandColor =
       colors[darkColorIndex] || colors[Math.min(1, colors.length - 1)];
-    const darkTextColorHex =
-      getContrastColor(darkBrandColor.hex) === "white" ? "#ffffff" : "#000000";
-    const darkTextColor = hexToRgb(darkTextColorHex)!;
+    const darkTextColor = getContrastColor(darkBrandColor.hex);
     const darkContrast = getContrastRatio(darkBrandColor, darkTextColor);
     const darkRating = getContrastRating(darkContrast);
 

@@ -3,7 +3,7 @@ import {
   getImageData,
   samplePixels,
   isNeutralColor,
-  getSaturation,
+  getContrastRatio,
 } from "./colorUtils";
 import { kmeansColors } from "./algorithms/kmeans";
 import { medianCutColors } from "./algorithms/mediancut";
@@ -11,6 +11,7 @@ import { vibrantColors } from "./algorithms/vibrant";
 import { dominantColors } from "./algorithms/dominant";
 import { histogramColors } from "./algorithms/histogram";
 import { paletteColors } from "./algorithms/palette";
+import { getContrastColor } from "@/components/BrandingPreview";
 
 export const ALGORITHMS: AlgorithmInfo[] = [
   {
@@ -59,44 +60,45 @@ export async function analyzeImage(
   const pixels = samplePixels(imageData, 10000);
 
   // Run selected algorithm
+  // Generate more colors initially since we'll filter for contrast
   let colors: Color[];
   switch (algorithm) {
     case "kmeans":
-      colors = kmeansColors(pixels, 6);
+      colors = kmeansColors(pixels, 12);
       break;
     case "mediancut":
-      colors = medianCutColors(pixels, 3); // 2^3 = 8 colors, we'll take top 6
+      colors = medianCutColors(pixels, 4); // 2^4 = 16 colors
       break;
     case "vibrant":
-      colors = vibrantColors(pixels, 6);
+      colors = vibrantColors(pixels, 12);
       break;
     case "dominant":
-      colors = dominantColors(pixels, 6);
+      colors = dominantColors(pixels, 12);
       break;
     case "histogram":
-      colors = histogramColors(pixels, 6);
+      colors = histogramColors(pixels, 12);
       break;
     case "palette":
-      colors = paletteColors(pixels, 6);
+      colors = paletteColors(pixels, 12);
       break;
     default:
       throw new Error(`Unknown algorithm: ${algorithm}`);
   }
 
   // Filter out neutral colors (white, black, grays)
-  const brandColors = colors.filter((color) => !isNeutralColor(color));
+  const nonNeutralColors = colors.filter((color) => !isNeutralColor(color));
 
-  // If we filtered out too many colors, return at least 2 colors
-  if (brandColors.length < 2 && colors.length >= 2) {
-    // Sort by saturation and return the most colorful ones
-    return colors
-      .sort((a, b) => {
-        const satA = getSaturation(a);
-        const satB = getSaturation(b);
-        return satB - satA;
-      })
-      .slice(0, Math.max(2, colors.length));
-  }
+  // A good branding color should have at least 4.5:1 contrast with our chosen text color
+  const brandColors = nonNeutralColors
+    .map((color) => {
+      const contrastColor = getContrastColor(color.hex);
+      const contrastRatio = getContrastRatio(color, contrastColor);
+      return { color, contrastRatio };
+    })
+    .filter((item) => item.contrastRatio >= 4.5) // Require at least 4.5:1 contrast ratio (WCAG AA standard)
+    .sort((a, b) => b.contrastRatio - a.contrastRatio) // Sort by best contrast first
+    .slice(0, 6) // Return up to 6 best colors
+    .map((item) => item.color);
 
-  return brandColors.length > 0 ? brandColors : colors;
+  return brandColors;
 }
