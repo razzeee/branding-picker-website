@@ -63,6 +63,20 @@ export default function ColorResults({
     onColorsExtracted?.(updatedColors);
   };
 
+  const useFlathubColors = () => {
+    if (!appData?.branding || appData.branding.length === 0) {
+      return;
+    }
+
+    const flathubColors: Color[] = appData.branding.map((brandColor) => {
+      const colorObj = hexToRgb(brandColor.value);
+      return colorObj || { r: 0, g: 0, b: 0, hex: "#000000" };
+    });
+
+    setColors(flathubColors);
+    onColorsExtracted?.(flathubColors);
+  };
+
   // Calculate color similarity (Delta E CIE76 approximation)
   const calculateColorSimilarity = (
     color1: Color,
@@ -174,6 +188,54 @@ export default function ColorResults({
 
   return (
     <div className="space-y-4">
+      {/* Flathub Colors Button */}
+      {appData?.branding && appData.branding.length > 0 && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                Flathub Branding Colors Available
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                This app already has branding colors defined on Flathub
+              </p>
+            </div>
+            <button
+              onClick={useFlathubColors}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+            >
+              Use Flathub Colors
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {appData.branding.map((brandColor, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-xs">
+                <div
+                  className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600"
+                  style={{
+                    backgroundColor: brandColor.value.startsWith("#")
+                      ? brandColor.value
+                      : `#${brandColor.value}`,
+                  }}
+                />
+                <div>
+                  <div className="font-mono font-semibold text-gray-900 dark:text-white">
+                    {brandColor.value.startsWith("#")
+                      ? brandColor.value.toUpperCase()
+                      : `#${brandColor.value.toUpperCase()}`}
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-400">
+                    {brandColor.type}
+                    {brandColor.scheme_preference &&
+                      ` • ${brandColor.scheme_preference}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {colors.map((color, index) => {
         const closestMatch = findClosestFlathubColor(color);
         const isVeryClose = closestMatch && closestMatch.similarity > 80;
