@@ -328,3 +328,19 @@ export async function getAverageColorFromUrl(imageUrl: string): Promise<Color> {
     img.src = imageUrl;
   });
 }
+
+/**
+ * Get the best contrast color (white or black) for a given color
+ */
+export function getContrastColor(hex: string): Color {
+  const color = hexToRgb(hex);
+  if (!color) return { r: 0, g: 0, b: 0, hex: "#000000" }; // Default to black
+
+  const white = { r: 255, g: 255, b: 255, hex: "#ffffff" };
+  const black = { r: 0, g: 0, b: 0, hex: "#000000" };
+
+  const whiteContrast = getContrastRatio(color, white);
+  const blackContrast = getContrastRatio(color, black);
+
+  return whiteContrast > blackContrast ? white : black;
+}

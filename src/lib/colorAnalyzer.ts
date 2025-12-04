@@ -4,6 +4,7 @@ import {
   samplePixels,
   isNeutralColor,
   getContrastRatio,
+  getContrastColor,
 } from "./colorUtils";
 import { kmeansColors } from "./algorithms/kmeans";
 import { medianCutColors } from "./algorithms/mediancut";
@@ -11,7 +12,6 @@ import { vibrantColors } from "./algorithms/vibrant";
 import { dominantColors } from "./algorithms/dominant";
 import { histogramColors } from "./algorithms/histogram";
 import { paletteColors } from "./algorithms/palette";
-import { getContrastColor } from "@/components/BrandingPreview";
 
 export const ALGORITHMS: AlgorithmInfo[] = [
   {

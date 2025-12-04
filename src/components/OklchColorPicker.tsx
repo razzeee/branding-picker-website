@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Color } from "@/lib/types";
-import { rgbToOklch, oklchToRgb, OklchColor } from "@/lib/colorUtils";
+import { rgbToOklch, oklchToRgb, OklchColor, hexToRgb } from "@/lib/colorUtils";
 
 interface OklchColorPickerProps {
   color: Color;
@@ -17,11 +17,13 @@ export default function OklchColorPicker({
 }: OklchColorPickerProps) {
   const [oklch, setOklch] = useState<OklchColor>(() => rgbToOklch(color));
   const [previewColor, setPreviewColor] = useState<Color>(color);
+  const [hexInput, setHexInput] = useState<string>(color.hex);
 
   // Update preview color when OKLCH values change
   useEffect(() => {
     const newColor = oklchToRgb(oklch);
     setPreviewColor(newColor);
+    setHexInput(newColor.hex);
   }, [oklch]);
 
   const handleLChange = (value: number) => {
@@ -36,6 +38,17 @@ export default function OklchColorPicker({
     setOklch({ ...oklch, h: value });
   };
 
+  const handleHexChange = (value: string) => {
+    setHexInput(value);
+    const rgb = hexToRgb(value);
+    if (rgb) {
+      const newOklch = rgbToOklch(rgb);
+      // We update the OKLCH state, which will trigger the useEffect
+      // to update previewColor and normalize the hexInput
+      setOklch(newOklch);
+    }
+  };
+
   const handleApply = () => {
     onColorChange(previewColor);
     onClose();
@@ -44,6 +57,7 @@ export default function OklchColorPicker({
   const handleReset = () => {
     const originalOklch = rgbToOklch(color);
     setOklch(originalOklch);
+    setHexInput(color.hex);
   };
 
   return (
@@ -98,10 +112,19 @@ export default function OklchColorPicker({
             </div>
           </div>
           <div className="text-center">
-            <div className="font-mono text-lg font-semibold text-gray-900 dark:text-white">
-              {previewColor.hex.toUpperCase()}
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-gray-600 dark:text-gray-400 font-mono">
+                Hex:
+              </span>
+              <input
+                type="text"
+                value={hexInput}
+                onChange={(e) => handleHexChange(e.target.value)}
+                className="font-mono text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:outline-none text-center w-32"
+                placeholder="#000000"
+              />
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
+            <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
               RGB({previewColor.r}, {previewColor.g}, {previewColor.b})
             </div>
           </div>
